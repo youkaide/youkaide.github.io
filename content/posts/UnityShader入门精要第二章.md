@@ -1,7 +1,7 @@
 +++
 date = '2026-10-14T10:00:00+08:00'
 draft = false
-title = 'UnityShader入门精要 第二章'
+title = 'UnityShader入门精要'
 description = '一句话摘要'
 categories = ['shader']
 showTableOfContents = true
@@ -55,7 +55,7 @@ showTableOfContents = true
 
 - GPU流水线（输入由DrawCall指定的顶点数据）
 
-  ![image-20261014203229021](image-20261014203229021.png)
+  ![image-20261014203229021](/images/image-20261014203229021.png)
 
   - 顶点着色器 Vertex Shader（完全可编程）：顶点的空间变换、顶点着色等功能
 
@@ -93,13 +93,13 @@ showTableOfContents = true
 
     OpenGL和DirectX的屏幕坐标系差异。对于一张512＊512大小的图像，在OpenGL中其（0, 0）点在左下角，而在DirectX中其(0, 0)点在左上角
 
-    ![image-20261014210323836](image-20261014210323836.png)
+    ![image-20261014210323836](/images/image-20261014210323836.png)
 
   - 三角形设置 Triangle Setup（固定函数）：由三角形的顶点计算一个三角网格表示信息。
 
   - 三角形遍历 Triangle Traversal （固定函数）/扫描变换 Scan Conversion：检测每个像素是否被一个三角网格所覆盖，如果覆盖就生成一个片元，片元的状态由三个顶点的信息进行插值得到。
 
-    ![image-20261014214922946](image-20261014214922946.png)
+    ![image-20261014214922946](/images/image-20261014214922946.png)
 
   - 片元着色器 Fragment Shader （完全可编程）/像素着色器 Pixel Shader：根据上一步插值后的片元信息，来计算该片元的输出颜色。可以完成纹理采样等渲染技术。只能影响单个片元，无法将结果发送给别的片元（例外：访问导数信息，gradient，derivative，硬件以 2×2 片元块为单位执行，允许通过 `dFdx/dFdy/fwidth` 读取相邻片元属性的屏幕空间差分。这是有限的结构化例外，主要用于 mipmap 选择、边缘检测、法线重建等。它不是任意通信，也不能读邻居的最终颜色。）
 
@@ -108,7 +108,7 @@ showTableOfContents = true
     - 决定每个片元的可见性
     - 将该片元颜色与颜色缓冲区的颜色合并
 
-    ![image-20261014215615575](image-20261014215615575.png)
+    ![image-20261014215615575](/images/image-20261014215615575.png)
 
     - 模板测试：GPU会首先读取（使用读取掩码）模板缓冲区中该片元位置的模板值，然后将该值和读取（使用读取掩码）到的参考值（reference value）进行比较，然后选择是否丢弃。一般用于限制渲染区域，或者渲染阴影，轮廓渲染等。
     - 深度测试：GPU会把该片元的深度值和已经存在于深度缓冲区中的深度值进行比较。
@@ -133,7 +133,7 @@ showTableOfContents = true
 
   - 使用命令缓冲区，CPU写命令，GPU读命令，添加与读取相互独立。
 
-    ![image-20261014221549440](image-20261014221549440.png)
+    ![image-20261014221549440](/images/image-20261014221549440.png)
 
   - DrawCall多了影响帧率，因为在每次调用Draw Call之前，CPU需要向GPU发送很多内容，包括数据、状态和命令等，GPU渲染很快，因此渲染速度往往快于CPU提交命令的速度
 
