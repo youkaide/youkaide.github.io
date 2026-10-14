@@ -1,0 +1,26 @@
+disabled = false
+locale = "zh-cn"
+label = "简体中文"
+weight = 1
+title = "位域存档"
+
+[params]
+  displayName = "中文"
+  isoCode = "zh-cn"
+  rtl = false
+  dateFormat = "2006年1月2日"
+  # logo = "img/logo.png"
+  # secondaryLogo = "img/secondary-logo.png"
+  description = "记录实时渲染与游戏开发的技术笔记"
+  # copyright = "Copy, _right?_ :thinking_face:"
+
+[params.author]
+  name = "几又"
+  email = "nnanamimi@qq.com"
+  # image = "img/blowfish_logo.png"
+  # imageQuality = 96
+  headline = "实时渲染爱好者"
+  bio = "记录图形学与游戏开发的学习笔记"
+  links = [
+    { github = "https://github.com/youkaide" },
+  ]
