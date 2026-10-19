@@ -141,11 +141,198 @@ showTableOfContents = true
 
     - 批处理 Batching：把很多小的DrawCall合并成一个大的Draw Call，再发送给GPU，然后在一个Draw Call中渲染它们。但要注意的是，使用批处理合并的网格将会使用同一种渲染状态。一般用于静态物体，因为动态物体每一帧都需要重新合并。
     - 避免使用大量很小的网格
+
     - 避免使用过多的材质
 
-    
+## 第三章 Unity Shader
 
-    
+- 材质
 
-    
+  - 创建一个材质
+  - 创建一个Unity Shader，并把他赋值
+  - 将材质赋给渲染对象
+  - 在材质属性中调整Unity Shader
 
+- Unity Shader
+
+  - standard Surface Shader
+
+    包含标准光照模型的表面着色器模板
+
+    unity对顶点/片元着色器更高一级的抽象
+
+    ```
+            Shader  "Custom/Simple  Surface  Shader"  {
+                SubShader  {
+                  Tags  {  "RenderType"  =  "Opaque"  }
+                  CGPROGRAM
+                  #pragma  surface  surf  Lambert
+                  struct  Input  {
+                      float4  color  :  COLOR;
+                  };
+                  void  surf  (Input  IN,  inout  SurfaceOutput  o)  {
+                      o.Albedo  =  1;
+                  }
+                  ENDCG
+                }
+                Fallback  "Diffuse"
+            }
+    ```
+
+  - Unlit Shader
+
+    不含光照的基本顶点/片元着色器
+
+    ![image-20261019163120018](/images/image-20261019163120018.png)
+
+    顶点/片元着色器写在Pass语义块中
+
+  - Image Effect Shader
+
+    后处理
+
+  - Compute Shader
+
+    利用GPU的并行性来进行一些与常规渲染流水线无关的计算
+
+  - 标准形式
+
+    ```
+            Shader  "MyShader"  {
+                Properties  {
+                  // 所需的各种属性
+                }
+                SubShader  {
+                  // 真正意义上的Shader代码会出现在这里
+                  // 表面着色器（Surface Shader）或者
+                  // 顶点/片元着色器（Vertex/Fragment Shader）或者
+                  // 固定函数着色器（Fixed Function Shader）
+                }
+                SubShader  {
+                  // 和上一个SubShader类似
+                }
+            }
+    ```
+
+- Shader Lab
+
+  Unity为开发者提供的高层级的渲染抽象层。
+
+  基本结构：
+
+  ```ShaderLab
+          Shader  "ShaderName"  {
+              Properties  {
+                // 属性
+              }
+              SubShader  {
+                  // 显卡A使用的子着色器
+              }
+              SubShader  {
+                  // 显卡B使用的子着色器
+              }
+              Fallback  "VertexLit"
+          }
+  ```
+
+  - `Shader  "Custom/MyShader"  {      }`这个Unity Shader在材质面板中的位置就是：Shader ->Custom -> MyShader。
+
+    ![image-20261015173602470](/images/image-20261015173602470.png)
+
+  - Properties
+
+    在Unity中，这些属性(Name）的名字通常由一个下划线开始
+
+    ```
+            Properties  {
+                Name  ("display  name",  PropertyType)  =  DefaultValue
+                Name  ("display  name",  PropertyType)  =  DefaultValue
+                // 更多属性
+            }
+    ```
+
+    ![image-20261015174123014](/images/image-20261015174123014.png)
+
+    例子
+
+    ```
+            Shader  "Custom/ShaderLabProperties"  {
+                Properties  {
+                  //  Numbers  and  Sliders
+                  _Int  ("Int",  Int)  =  2
+                  _Float  ("Float",  Float)  =  1.5
+                  _Range("Range",  Range(0.0,  5.0))  =  3.0
+                  //  Colors  and  Vectors
+                  _Color  ("Color",  Color)  =  (1,1,1,1)
+                  _Vector  ("Vector",  Vector)  =  (2,  3,  6,  1)
+                  //  Textures
+                  _2D  ("2D",  2D)  =  ""  {}
+                  _Cube  ("Cube",  Cube)  =  "white"  {}
+                  _3D  ("3D",  3D)  =  "black"  {}
+                }
+    
+                FallBack  "Diffuse"
+            }
+    ```
+
+  - SubShader
+
+    可以有多个，然后选择第一个可以在目标平台上运行的，都不支持的话，使用fullback指定的subshader
+
+    ```
+            SubShader  {
+                // 可选的
+                [Tags]//标签
+           	    Tags  {  "TagName1"  =  "Value1"  "TagName2"  =  "Value2"  }
+    
+                // 可选的
+                [RenderSetup]//状态
+    
+                Pass  {
+                [Name]
+                Name  "MyPassName"//定义Pass的名称
+                [Tags]
+                [RenderSetup]
+                
+                // 可选的
+                UsePass  "MyShader/MYPASSNAME"//使用别的UnityShader中的Pass，使用大写名字
+                // 可选的
+                GrabPass //该Pass负责抓取屏幕并将结果存储在一张纹理中，以用于后续的Pass处理
+                //  Other  code
+            }
+                //  Other  Passes
+                //每个pass定义一次完整的渲染流程，数目过多会导致渲染性能下降
+            }
+    ```
+
+    **常见渲染状态**
+
+    ![image-20261015174712607](/images/image-20261015174712607.png)
+
+    pass外设置全局使用，pass内设置仅pass使用
+
+    **标签类型**
+
+    ![image-20261015174917972](/images/image-20261015174917972.png)
+
+    以上仅在subshader中声明
+
+    **Pass的标签**
+
+    ![image-20261015175351526](/images/image-20261015175351526.png)
+
+    **Fallback**
+
+    ```
+            Fallback  "name"
+            // 或者
+            Fallback  Off
+    ```
+
+    所以subshader都不支持的话，使用fullback指定的subshader或者不管
+
+  - 其他语义
+
+    CustomEditor语义来扩展编辑界面。
+
+    Category语义来对Unity Shader中的命令进行分组。
