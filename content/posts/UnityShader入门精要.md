@@ -10,6 +10,8 @@ showTableOfContents = true
 
 {{< katex >}}
 
+# 基础篇
+
 ## 第二章 渲染器流水线
 
 - 渲染流程：**应用阶段、几何阶段、光栅化阶段**
@@ -337,7 +339,7 @@ showTableOfContents = true
 
     Category语义来对Unity Shader中的命令进行分组。
 
-## 第四章
+## 第四章 数学
 
 - Unity使用的坐标系
 
@@ -448,3 +450,153 @@ showTableOfContents = true
 - unity内置变量
 
   ![image-20261028163405746](/images/image-20261028163405746.png)![image-20261028163417693](/images/image-20261028163417693.png)
+
+# 初级篇
+
+## 第五章 Unity Shader
+
+本书使用Unity 5.2.1 免费版，系统环境为Mac OS X 10.9.5。
+
+- 顶点/片元着色器
+
+  - 创建一个Unity Shader
+  - 创建一个材质，将shader赋予这个材质
+
+  ```shader
+  Shader "UNity Shaders Book/Chapter 5/Simple Shader"//定义shader的位置和名字
+  {
+  	Properties
+  	{
+  		//声明一个Color类型的属性
+  		_Color ("Color Tint", Color) = (1.0, 1.0, 1.0, 1.0);
+  	}
+  	SubShader
+  	{
+  		pass
+  		{
+  			CGPROGRAM//和ENDCG已经包围了CG片段
+  			
+  			//编译指令，告诉Unity哪个函数包含了顶点着色器/片段着色器
+  			#pragma vertex vert
+  			#pragma fragment frag
+  			
+  			//如果在Properties声明了属性，需要在CG代码中定义一个与属性名称和类型都匹配的变量
+  			fixed4 _Color;
+  			
+  			//POSITION，SV_POSITION为CG/HLSL中的语义
+  			//使用一个结构体来定义顶点着色器的输入
+  			//a: application, v: vertex shader, 2 == to
+  			struct a2v
+  			{
+  				//POSITION: 把模型空间的顶点坐标填充到vertex中
+  				float4 vertex : POSITION;
+  				//NORMAL: 把模型空间的法线方向填充到normal中
+  				float3 normal : NORMAL;
+  				//TEXCOORDO: 把模型的第一套纹理坐标填充到texcoord中
+  				float4 texcoord : TEXCOORDO;
+  			}
+  			
+  			//使用一个结构体来定义顶点着色器的输出
+  			struct v2f
+  			{
+  				//SV_POSITION: pos内包含了裁剪空间中的顶点坐标的位置信息
+  				float4 pos : SV_POSITION;
+  				//COLOR0: 存储颜色信息
+  				fixed3 color : COLOR0;
+  			}
+  			
+  			//顶点着色器，逐顶点执行
+  			v2f vert(float4 v : POSITION) : SV_POSITION
+  			{
+  				v2f o;
+  				//mul：矩阵乘法函数
+  				//UNITY_MATRIX_MVP: MVP变换矩阵，将v从模型空间换到裁剪空间
+  				o.pos = mul(UNITY_MATRIX_MVP, v.vertex);
+  				//v.normal: 法线分量，位于[-1, 1]
+  				//屏幕/纹理颜色每个分量一般在[0, 1]
+  				//把法线当颜色输出，用于调试可视化或写入法线贴图
+  				o.color = v.normal * 0.5 + fixed3(0.5, 0.5, 0.5);
+  				return o;
+  			}
+  			
+  			//逐片段调用,片段着色器的输入实际上是把顶点着色器的输出镜像插值后得到的结果
+  			//fixed: 一种四分量、低精度的数据类型，通常用来表示颜色，.r/.g/.b/.a,分别是红色，绿色，蓝色，透明度（Alpha通道）
+  			//SV_Target: 一个系统语义，将输出颜色存储到一个渲染目标。
+  			flxed4 frag(v2f i) : SV_Target
+  			{
+  				//返回颜色，其中(0, 0, 0)为黑色，(1, 1, 1)为白色
+  				//将插值后的i.color显示到屏幕上
+  				return fixed4(i.color, 1.0);
+  			}
+  			
+  			ENDCG
+  		}
+  	}
+  }
+  ```
+
+  填充到POSITION，TANGENT等语言中的数据有材质的Mesh Render所提供。在每一帧调用Draw Call的时候，Mesh Render组件会把它负责渲染到模型数据发给Unity Shader。
+
+  法线贴图默认淡蓝色：因为模型表面大多数法线朝外，在切线空间中为(0, 0, 1)
+  $$
+  (0, 0, 1) * 0.5 + 0.5 = (0.5, 0.5, 1)
+  $$
+  Properties语义块用于声明材质属性，不是必须的。
+
+  ![image-20261029114049747](/images/image-20261029114049747.png)
+
+  uniform关键词是CG中修饰变量和参数的一种修饰词，用于提供一些关于该变量初始值是如何制定和存储的相关信息，unity中可以省略。
+
+- Unity提供的内置文件和变量
+
+  内置的包含文件：#include " ",后缀为.cginc
+
+  ```
+  CGPROGRAM
+  // ...
+  include "UnityCG.cginc"
+  // ...
+  ENDCG
+  ```
+
+  ![image-20261029114724865](/images/image-20261029114724865.png)
+
+  ![image-20261029114824861](/images/image-20261029114824861.png)
+
+  ![image-20261029114835167](/images/image-20261029114835167.png)
+
+- Unity提供的CG/HLSL语义
+
+  - 语义
+
+    赋给Shder输入和输出的字符串，让Shader指导从哪里读取数据并且把数据输出到哪里。即使语义的名称一样，如果出现的位置不同含义也不同。
+
+    DirectX 10以后，由SV（system-value) 开头的代表系统数值，用这些语义描述的变量是不可以随便赋值的。
+
+    ![image-20261029115358312](/images/image-20261029115358312.png)
+
+    ![image-20261029115417712](/images/image-20261029115417712.png)
+
+    ![image-20261029115434673](/images/image-20261029115434673.png)
+
+- Debug
+
+  - 使用假彩色图像：把需要调试的变量映射到[0,1]之间，再输出到屏幕上
+
+    ![image-20261029115810194](/images/image-20261029115810194.png)
+
+  - Visual Studio
+
+    使用Graphics Debugger来进行调试
+
+  - Frame Debugger：unity原生帧调试器
+
+    查看该帧进行时的各种渲染事件，DrawCall序列，清空帧缓存等
+
+- 规范Shader
+
+  ![image-20261029120348213](/images/image-20261029120348213.png)
+
+  在大多桌面GPU上所有计算都按最高精度计算，但是在移动端上会有区别。
+
+  Shader Model ：微软提出的规范，它们决定了Shader中各个特性的能力这些特性和能力体现 在Shader能使用的运算指令数目 、 寄存器个数等各个方面 。Shader Model 等级越高 Shader 的能力就越大 。
