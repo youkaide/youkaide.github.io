@@ -600,3 +600,343 @@ showTableOfContents = true
   在大多桌面GPU上所有计算都按最高精度计算，但是在移动端上会有区别。
 
   Shader Model ：微软提出的规范，它们决定了Shader中各个特性的能力这些特性和能力体现 在Shader能使用的运算指令数目 、 寄存器个数等各个方面 。Shader Model 等级越高 Shader 的能力就越大 。
+
+## 第六章 基础光照
+
+- 辐射度（irradiance）：通过计算垂直于l（l:光源的方向）的单位面积上单位时间内穿过的能量来得到。使用光源方向和表面法线之间的夹角的余弦值来得到。
+
+- 高光反射（specular）：物体表面是如何反射光线的。
+
+- 漫反射（diffuse）：有多少光线会被折射、吸收和散射出表面。
+
+- 出射度（exitance）：出射光线的数量和方向。
+
+- 着色（shading）：根据材质属性、光源信息，使用一个等式去计算沿某个观察方向的出射度的过程。
+
+- 标准光照模型：只管线直接光照
+
+  如果在片元着色器中计算（逐像素光照）：在面片之间对顶点法线之间进行插值，Phong着色
+
+  如果在顶点着色器中计算（逐顶点光照）：在每个顶点上计算光照，然后再渲染图元内部进行线性插值，被称为高洛德着色
+
+  - 自发光（emissive）：使用材质的自发光颜色，这个物体不会被当成一个光源
+
+    ![image-20261030161550316](/images/image-20261030161550316.png)
+
+  - 高光反射
+
+    ![image-20261030161852368](/images/image-20261030161852368.png)
+
+  - 漫反射
+
+    Phong模型
+
+    ![image-20261030161622294](/images/image-20261030161622294.png)
+
+    Blinn Phong模型：引入半程向量h
+
+    ![image-20261030162256563](/images/image-20261030162256563.png)
+
+    无法表现菲涅耳反射等物理现象，并且该模型是各项同性的，当固定视角和光源方向后，旋转表面，反射不会发生变换。
+
+  - 环境光（ambient）：使用环境光来模拟间接光照
+
+    ![image-20261030161600858](/images/image-20261030161600858.png)
+
+    unity中在Window->Lighting->Ambient Source/Amient Color/Ambient Intensity控制
+
+- 实现
+
+  在原书中实现以下模型均使用的是Built-in渲染管线，但是如今这个管线以及被标记为已弃用，所有以下模型我都改为了使用URP渲染管线的Unlit Shader
+
+  - 漫反射光照模型
+
+    `saturate(x)`：可以用于操作矢量或标量，把x截取在[0,1]范围内。
+  
+    ```shader
+    // Upgrade NOTE: replaced '_World2Object' with 'unity_WorldToObject'
+    
+    Shader "Unlit/Day3/Diffuse Vertex-Level"
+    {
+    	Properties
+    	{
+    		_Diffuse("Diffuse Color", Color) = (1, 1, 1, 1)
+    	}
+    
+    	SubShader
+    	{
+    		Tags
+    		{
+    			"RenderType" = "Opaque" 
+    			//必须声明所属管线，否则URP不会识别
+    			"RenderPipeline" = "UniversalPipeline"
+    		}
+    
+    		Pass
+    		{
+    			Tags{ "LightMode" = "UniversalForward" }
+    
+    			//URP改用HLSL
+    			//CGPROGRAM
+    			HLSLPROGRAM
+    
+    			#pragma target 3.0
+    			#pragma vertex vert
+    			#pragma fragment frag
+    
+    			//#include "UnityCG.cginc"
+    			//#include "UnityLightingCommon.cginc"
+    			// 【URP】Core.hlsl 提供空间变换、Attribute/Varyings 基础结构
+                // 【URP】Lighting.hlsl 提供 GetMainLight() 等光照函数
+                #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+                #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+    
+    			//fixed4 _Diffuse;
+    			 // URP 推荐把材质属性放进 CBUFFER，以兼容 SRP Batcher
+                CBUFFER_START(UnityPerMaterial)
+                    half4 _Diffuse;
+                CBUFFER_END
+    
+    
+    			struct Attributes
+    			{
+    				float4 positionOS : POSITION;
+    				float3 normalOS : NORMAL;
+    			};
+    
+    			struct Varyings
+    			{
+    				float4 positionHCS : SV_POSITION;
+    				half3 color : TEXCOORD0;
+    			};
+    
+    			Varyings vert(Attributes v)
+    			{
+    				Varyings o;
+    				o.positionHCS = TransformObjectToHClip(v.positionOS.xyz);
+    
+    				// 这里用球谐系数 w 分量取处理后环境光，是 URP 自定义 Shader 中常用的替代方式
+                    half3 ambient = half3(unity_SHAr.w, unity_SHAg.w, unity_SHAb.w);
+    				half3 worldNormal = normalize(TransformObjectToWorldNormal(v.normalOS));
+    
+    				Light mainLight = GetMainLight();
+    				half3 worldLight = normalize(mainLight.direction);
+    
+    				half3 diffuse = mainLight.color * _Diffuse.rgb * saturate(dot(worldNormal, worldLight));
+    				o.color = ambient + diffuse;
+    
+    				return o;
+    			}
+    
+    			half4 frag(Varyings i) : SV_Target
+    			{
+    				return half4(i.color, 1.0);
+    			}
+    
+    			ENDHLSL
+    			//ENDCG
+    		}
+    	}
+    
+    	Fallback "Universal Render Pipeline/Simple Lit"
+    }
+    
+    ```
+  
+  - 逐像素光照
+  
+    ```shader
+    Shader "Unlit/URP/Specular Pixel-Level"
+    {
+        Properties
+        {
+            _Diffuse("Diffuse Color", Color) = (1, 1, 1, 1)
+            _Specular("Specular Color", Color) = (1, 1, 1, 1)
+            _Gloss("Gloss", Range(8.0, 256)) = 20
+        }
+    
+        SubShader
+        {
+            Tags 
+            { 
+                "RenderType" = "Opaque" 
+                // 【URP 必须】声明渲染管线
+                "RenderPipeline" = "UniversalPipeline" 
+            }
+    
+            Pass
+            {
+                // 【原】Tags{ "LightMode" = "ForwardBase" }
+                // 【URP】改为 UniversalForward
+                Tags { "LightMode" = "UniversalForward" }
+    
+                // 【原】CGPROGRAM / ENDCG
+                // 【URP】改为 HLSLPROGRAM / ENDHLSL
+                HLSLPROGRAM
+    
+                #pragma vertex vert
+                #pragma fragment frag
+                #pragma target 3.0
+    
+                // 【原】#include "UnityCG.cginc"
+                // 【原】#include "UnityLightingCommon.cginc"
+                // 【URP】引入 URP 的核心和光照库
+                #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+                #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+    
+                CBUFFER_START(UnityPerMaterial)
+                    half4 _Diffuse;
+                    half4 _Specular;
+                    float _Gloss;
+                CBUFFER_END
+    
+                // 【原】struct a2v
+                struct Attributes
+                {
+                    float4 positionOS : POSITION;
+                    float3 normalOS   : NORMAL;
+                };
+    
+                // 【原】struct v2f
+                // 【URP】注意这里把颜色去掉，换成了世界空间法线和世界空间坐标
+                struct Varyings
+                {
+                    float4 positionHCS : SV_POSITION;
+                    float3 worldNormal : TEXCOORD0;
+                    float3 worldPos    : TEXCOORD1;
+                };
+    
+                Varyings vert(Attributes v)
+                {
+                    Varyings o;
+    
+                    // 【原】o.pos = mul(UNITY_MATRIX_MVP, v.vertex);
+                    // 【URP】使用内置函数转换到裁剪空间
+                    o.positionHCS = TransformObjectToHClip(v.positionOS.xyz);
+    
+                    // 【原】o.worldNormal = mul(v.normal, (float3x3)_World2Object);
+                    // 【URP】注意：书里用的是转置矩阵，URP 直接调用法线转换函数更安全
+                    o.worldNormal = TransformObjectToWorldNormal(v.normalOS);
+    
+                    // 【原】o.worldPos = mul(_Object2World, v.vertex).xyz;
+                    // 【URP】使用内置函数转换到世界空间
+                    o.worldPos = TransformObjectToWorld(v.positionOS.xyz);
+    
+                    return o;
+                }
+    
+                half4 frag(Varyings i) : SV_Target
+                {
+                    // 【原】fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz;
+                    // 【URP】使用球谐系数获取环境光
+                    half3 ambient = half3(unity_SHAr.w, unity_SHAg.w, unity_SHAb.w);
+    
+                    // 【原】fixed3 worldNormal = normalize(i.worldNormal);
+                    half3 worldNormal = normalize(i.worldNormal);
+    
+                    // 【原】fixed3 worldLightDir = normalize(_WorldSpaceLightPos0.xyz);
+                    // 【URP】通过 GetMainLight() 获取主光源方向（指向光源）和颜色
+                    Light mainLight = GetMainLight();
+                    half3 worldLightDir = normalize(mainLight.direction);
+    
+                    // 【原】fixed3 diffuse = _LightColor0.rgb * _Diffuse.rgb * saturate(dot(worldNormal, worldLightDir));
+                    // 【URP】_LightColor0 替换为 mainLight.color
+                    half3 diffuse = mainLight.color * _Diffuse.rgb * saturate(dot(worldNormal, worldLightDir));
+    
+                    // 【原】fixed3 reflectDir = normalize(reflect(-worldLightDir, worldNormal));
+                    // 反射方向计算在 URP 中保持不变
+                    half3 reflectDir = normalize(reflect(-worldLightDir, worldNormal));
+    
+                    // 【原】fixed3 viewDir = normalize(_WorldSpaceCameraPos.xyz - i.worldPos.xyz);
+                    // 【URP】_WorldSpaceCameraPos 依然可用，或者使用内置函数
+                    half3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
+    
+                    // 【原】fixed3 specular = _LightColor0.rgb * _Specular.rgb * pow(saturate(dot(reflectDir, viewDir)), _Gloss);
+                    // 【URP】同样把 _LightColor0 替换为 mainLight.color
+                    half3 specular = mainLight.color * _Specular.rgb * pow(saturate(dot(reflectDir, viewDir)), _Gloss);
+    
+                    // 【原】return fixed4(ambient + diffuse + specular, 1.0);
+                    return half4(ambient + diffuse + specular, 1.0);
+                }
+    
+                ENDHLSL
+            }
+        }
+        
+        // 【原】Fallback "Diffuse"
+        // 【URP】替换为 URP 的回退着色器
+        FallBack "Universal Render Pipeline/Simple Lit"
+    }
+    ```
+
+## 第七章 基础纹理
+
+顶点的UV坐标的范围通常都会被归一到[0,1]的范围内。
+
+Unity使用的纹理空间符合OpenGL，原点位于纹理左下角。
+
+- 单张纹理
+
+  使用一张纹理来代替物体的漫反射颜色。
+
+  纹理名_ST得到纹理的缩放和偏移，.xy存储缩放值，.zw存放偏移值
+
+- 纹理的属性
+
+  - Alpha from Grayscale ：透明通道的值将会由每个像素的灰度值生成
+
+  - Wrap Mode：当纹理坐标超过[0,1]范围后将会如何被平铺
+
+    - Repeat：超过1的整数部分会被舍弃，直接使用小数部分进行采样
+    - Clamp：纹理坐标大于1，将会被截取到1，小于0，会被截取到0
+
+  - Filter Mode：当纹理由于变换而产生拉伸时将会采用哪一种滤波方式，以下模式得到的效果依次增加，但是需要耗费的性能也依次增大
+
+    - Point
+
+      使用最近邻（nearest neighbor）滤波，在放大和缩小的时候，他的采样像素数目通常只有一个，图像偏向像素风
+
+    - Bilinear
+
+      使用线性滤波，对于每个目标像素，会找四个邻近像素，对其进行线性插值混合后得到最终像素，最后结果像是被模糊了
+
+    - Trilinear
+
+      约等于Bilinear，但是在此基础上还使用了mipmap
+
+    纹理缩小比放大更复杂，因为纹理缩小需要处理抗锯齿问题，常使用多级渐远纹理（mipmapping）来解决，该技术是将原纹理提前用滤波处理来得到很多更小的图像，最后形成了一个图像金字塔，每一层都是对上一层降采样的结果。
+
+  - Format ：Unity内部使用哪种格式来存储纹理
+
+- 凹凸映射（bump mapping）：使用一张纹理来修改模型表面的法线
+
+  - 高度纹理（height map）：模拟表面位移最后得到一个修改后的法线值
+
+    使用一个高度图来实现，颜色越浅表示表面越向外凸起，越深表示越向内凹
+
+  - 法线纹理（normal map）：直接存储表面法线
+
+    ![image-20261104173140737](/images/image-20261104173140737.png)
+
+    - 模型空间的法线纹理：将修改后的模型空间中的表面法线存储在一张纹理中
+
+      优点：计算和生成简单，可以提供平滑的边界，在边界通过插值得到的法线可以平滑变换，而切线空间的可能会在边缘处或者尖锐部分造成更多可见的缝合迹象
+
+    - 切线空间的法线纹理：使用模型顶点的切线空间来存储法线
+
+      优点：自由度高，可进行UV动画，可宠用法线纹理，可压缩。
+
+- 渐变纹理：控制漫反射光照的结果
+
+  在漫反射中计算出法线与光线的点积，并且将这个数值映射在[0,1]区间内，作为u去纹理贴图内采样得到颜色，在这种情况下，渐变纹理是一维查表，他只有水平方向上有用，垂直V方向上颜色都一样没用额外信息，所有只需要用u去采样
+
+- 遮罩纹理：保护一些区域使其免于被修改或者混合纹理
+
+  是一张RGBA图，每种通道控制一种效果，片元着色器中只采样一次。
+
+  
+
+  
+
+
+
